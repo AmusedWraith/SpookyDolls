@@ -15,9 +15,13 @@ import struct
 import sys
 import time
 import traceback
-
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 from nrf24 import *
 import pigpio
+
+gauth = GoogleAuth()           
+drive = GoogleDrive(gauth) 
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -30,8 +34,6 @@ args = vars(ap.parse_args())
 warnings.filterwarnings("ignore")
 conf = json.load(open(args["conf"]))
 client = None
-
-address = "00001"
 
 pi = pigpio.pi("localhost", 8888)
 if not pi.connected:
@@ -77,8 +79,7 @@ for f in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True
     timestamp = datetime.datetime.now()
     text = "Unoccupied"
     outputText = "Unoccupied"
-    tallBlock = 0;
-    wideBlock = 0;
+    blocks = 0;
     
     # resize the frame, convert it to grayscale, and blur it
     frame = imutils.resize(frame, width=500)
@@ -118,13 +119,11 @@ for f in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True
         (x, y, w, h) = cv2.boundingRect(c)
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         text = "Occupied"
-        if w > h :
-            wideBlock+=1
-        else:
-            tallBlock+=1
+        blocks+=1
+
     
     if text == "Occupied" :
-        outputText = "Occupied: " + str(wideBlock) + " wide, " + str(tallBlock) + " tall"
+        outputText = "Occupied: " + str(blocks) + " blocks"
         
     
     # draw the text and timestamp on the frame
@@ -134,10 +133,9 @@ for f in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True
     cv2.putText(frame, ts, (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX,
         0.35, (0, 0, 255), 1)
     
-        # check to see if the room is occupied
+    # check to see if the room is occupied
     if text == "Occupied":
         print("[INFO] Occupied")
-       # behavior.sendSignal("FADE")
         
         # check to see if enough time has passed between uploads
         if (timestamp - lastUploaded).seconds >= conf["min_upload_seconds"]:
@@ -148,8 +146,27 @@ for f in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True
             # high enough
             if motionCounter >= conf["min_motion_frames"]:
                 print("[INFO] Send Behavior")
-                scene = thePlay.getScene(wideBlock, tallBlock)
+                scene = thePlay.getScene(blocks)
                 scene.playScene()
+                
+                #Upload image to google drive
+                if conf["use_dropbox"]:
+                    print("[INFO] Writing Image")
+                    # write the image to temporary file
+                    t = TempImage("./trigger_images")
+                    cv2.imwrite(t.path, frame)
+                    # upload the image to Dropbox and cleanup the tempory image
+             #       print("[UPLOAD] {}".format(ts))
+                    #path = "/{base_path}/{timestamp}.jpg".format(
+                    #    base_path=conf["dropbox_base_path"], timestamp=ts)
+                    
+             #       gfile = drive.CreateFile({'parents': [{'id': '1cViTLhLLIG__HgeFQ4x3ZKRF67UjcMQZ'}]})
+    
+                    # Read file and set it as the content of this instance.
+             #       gfile.SetContentFile(t.path)
+             #       gfile.Upload() # Upload the file.
+                    
+                    t.cleanup()
                         
                 # update the last uploaded timestamp and reset the motion
                 # counter
@@ -172,3 +189,4 @@ for f in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True
     
     # clear the stream in preparation for the next frame
     rawCapture.truncate(0)
+
