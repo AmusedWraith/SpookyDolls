@@ -15,8 +15,6 @@
 
 CRGB leds[NUM_LEDS];
 
-
-
 RF24 radio(CE_PIN, CSN_PIN);
 
 char dataReceived[9];
@@ -139,13 +137,11 @@ void fadeUp(int timeStep) {
 // main program
 void loop() {
 
- // if (radio.available()) {
+  if (radio.available()) {
 
-  //    radio.read(&dataReceived, sizeof(dataReceived)-1);    //Reading the data
+    radio.read(&dataReceived, sizeof(dataReceived)-1);    //Reading the data
 
       CRGB colorToUse;
-
-      strcpy(dataReceived, "AQGLW 60");
 
       Serial.print("Received: ");
       Serial.print(dataReceived);
@@ -215,47 +211,7 @@ void loop() {
 
       }
 
-      
-/*
-      if (strcmp(dataReceived,"REDGLOW ")==0) {
-        showProgramCleanUp(10);
-        setAllRGB(CRGB::Red);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        showProgramCleanUp(10);
-      }
-      if (strcmp(dataReceived,"GRNGLOW ")==0) {
-        showProgramCleanUp(10);
-        setAllRGB(CRGB::Green);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        delay(500);
-        fadeUp(10);
-        fadeDown(10);
-        showProgramCleanUp(10);
-      }
-    }*/
+    }
 
     delay(1000);
 

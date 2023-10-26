@@ -49,7 +49,7 @@ class Play:
         #1
         tempScene = Scene()
         tempScene.addPart(self.actors[0],"FADE  45")
-        tempScene.addPart(self.actors[5],"REDGLOW")
+        tempScene.addPart(self.actors[5],"RDGLW 45")
         tempScene.addMusic("doll_quotes/singing_1.mp3")
 
         self.scenes.append (tempScene)
