@@ -2,6 +2,7 @@ import cv2
 import datetime
 import argparse
 from transmitter.play import Play
+from pyimagesearch.tempimage import TempImage
 import serial
 import time
 import warnings
@@ -26,6 +27,8 @@ if not cap.isOpened():
 	print("Cannot open camera")
 	exit()
 
+avg = None
+
 #cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')) # depends on fourcc available camera
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, conf["frame_width"])
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, conf["frame_height"])
@@ -38,8 +41,9 @@ minFrames = 10
 minTimeBetweenTriggers = 60
 motionCounter = 0
 mode = "AUTO"
+deltaThresh = 5
 
-mog = cv2.createBackgroundSubtractorMOG2()
+#mog = cv2.createBackgroundSubtractorMOG2()
 
 serialLink = serial.Serial(port='/dev/ttyUSB0',   baudrate=9600, timeout=.1)
 time.sleep(5)
@@ -57,16 +61,30 @@ while (cap.isOpened()):
 	if time_elapsed > 1. / frameRate:
 		prevFrameTime = time.time()
 
-		motionDetected = False
+		# convert it to grayscale, and blur it
 		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+		gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-		fgmask = mog.apply(gray)
+		# if the average frame is None, initialize it
+		if avg is None:
+			avg = gray.copy().astype("float")
+			continue
 
-		kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-		fgmask = cv2.erode(fgmask, kernel, iterations=1)
-		fgmask = cv2.dilate(fgmask, kernel, iterations=1)
+		# accumulate the weighted average between the current frame and
+		# previous frames, then compute the difference between the current
+		# frame and running average
+		cv2.accumulateWeighted(gray, avg, 0.5)
+		frameDelta = cv2.absdiff(gray, cv2.convertScaleAbs(avg))
 
-		contours, hierarchy = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		# threshold the delta image, dilate the thresholded image to fill
+		# in holes, then find contours on thresholded image
+		thresh = cv2.threshold(frameDelta, deltaThresh, 255, cv2.THRESH_BINARY)[1]
+		thresh = cv2.dilate(thresh, None, iterations=2)
+		contours = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+								cv2.CHAIN_APPROX_SIMPLE)
+		contours = imutils.grab_contours(contours)
+
+		motionDetected = False
 
 		for contour in contours:
 			# Ignore small contours
@@ -75,10 +93,13 @@ while (cap.isOpened()):
 
 			# Draw bounding box around contour
 			motionDetected = True
-			motionCounter=motionCounter+1
-			print("MotionCounter: " + str(motionCounter))
+
 			x, y, w, h = cv2.boundingRect(contour)
 			cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+		if motionDetected == True:
+			motionCounter=motionCounter+1
+			print("MotionCounter: " + str(motionCounter))
 
 		if motionDetected == False:
 			motionCounter = 0
@@ -98,6 +119,11 @@ while (cap.isOpened()):
 				cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
 		cv2.imshow('Motion Detection', frame)
+
+		if motionDetected == True:
+			t = TempImage()
+			print(t.path)
+			cv2.imwrite(t.path, frame)
 
 		key = cv2.waitKey(1)
 
